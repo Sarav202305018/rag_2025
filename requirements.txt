@@ -1,6 +1,7 @@
-streamlit
 faiss-cpu
-sentence-transformers
 numpy
 pandas
+sentence-transformers
+rank-bm25
+streamlit
 scikit-learn
