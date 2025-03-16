@@ -9,7 +9,7 @@ import streamlit as st  # For UI
 from sklearn.preprocessing import MinMaxScaler
 
 # Step 1: Load & Preprocess Financial Data
-def load_financial_data(file_path='/content/sample_data/financial_data.csv'):
+def load_financial_data(file_path='/financial_data.csv'):
     """
     Load and preprocess financial data:
     - Strips column names of spaces
@@ -58,7 +58,7 @@ def build_corpus(df):
 
 # Step 3: Initialize Model & Create Indexes
 # Load financial data
-df = load_financial_data('/content/sample_data/financial_data.csv')
+df = load_financial_data('/financial_data.csv')
 corpus, metadata = build_corpus(df)
 
 # Initialize pre-trained embedding model
