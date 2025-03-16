@@ -120,7 +120,7 @@ def validate_query(query):
     - Ensures financial relevance using keyword filtering and embedding similarity.
     """
     forbidden_words = ["hack", "attack", "illegal", "terror", "drugs"]
-    finance_keywords = ["revenue", "profit", "market cap", "debt", "income", "ROE", "EBITDA"]
+    finance_keywords = ["revenue", "profit", "market cap", "debt", "income", "ROE", "EBITDA", "market", "shares", "revenue", "equity"]
 
     # Block forbidden words
     if any(word in query.lower() for word in forbidden_words):
