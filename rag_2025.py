@@ -2,9 +2,11 @@ import faiss
 import pickle
 import numpy as np
 import pandas as pd
+import re
 from sentence_transformers import SentenceTransformer
 from rank_bm25 import BM25Okapi
-import re
+import streamlit as st  # For UI
+from sklearn.preprocessing import MinMaxScaler
 
 # Load financial data
 def load_financial_data(file_path='financial_data.csv'):
