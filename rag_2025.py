@@ -8,32 +8,41 @@ from rank_bm25 import BM25Okapi
 import streamlit as st  # For UI
 from sklearn.preprocessing import MinMaxScaler
 
-# Load financial data
-def load_financial_data(file_path='financial_data.csv'):
+# Step 1: Load & Preprocess Financial Data
+def load_financial_data(file_path='/financial_data.csv'):
+    """
+    Load and preprocess financial data:
+    - Strips column names of spaces
+    - Removes NaN values
+    """
     df = pd.read_csv(file_path)
-    df.columns = df.columns.str.strip()  # Remove extra spaces in column names
-    df = df.dropna()
+    df.columns = df.columns.str.strip()
+    df.dropna(inplace=True)
     return df
 
-# Preprocess text
 def preprocess_text(text):
+    """Clean text by removing special characters and converting to lowercase."""
     text = re.sub(r'[^a-zA-Z0-9.,\s]', '', text)
     return text.lower()
 
-# Chunk text into smaller parts
-def chunk_text(text, chunk_size=500):  # Increased chunk size to reduce excessive splitting
+def chunk_text(text, chunk_size=500):
+    """Split text into chunks of a given size."""
     words = text.split()
     return [' '.join(words[i:i+chunk_size]) for i in range(0, len(words), chunk_size)]
 
-# Create text corpus and metadata
+# Step 2: Create Corpus & Metadata
 def build_corpus(df):
+    """
+    Convert structured financial data into a text-based corpus for retrieval.
+    - Ensures unique Company-Year entries.
+    - Constructs metadata for each entry.
+    """
     corpus = []
     metadata = []
 
-    # 🔹 Ensure only ONE entry per Company-Year
     unique_entries = df.groupby(["Company", "Year"]).first().reset_index()
 
-    for _, row in unique_entries.iterrows():  # Use only unique Company-Year rows
+    for _, row in unique_entries.iterrows():
         text_data = (
             f"Year: {row['Year']}, Company: {row['Company']}, "
             f"Category: {row['Category']}, Market Cap: {row['Market Cap(in B USD)']}B, "
@@ -42,53 +51,64 @@ def build_corpus(df):
             f"ROE: {row['ROE']}"
         )
 
-        corpus.append(text_data)  # Store only 1 entry per Company-Year
-        metadata.append(text_data)  # Keep metadata consistent
+        corpus.append(text_data)
+        metadata.append(text_data)
 
     return corpus, metadata
 
-
-# Initialize Sentence Transformer model
-model = SentenceTransformer('all-MiniLM-L6-v2')
-
-# Load and preprocess data
-df = load_financial_data('financial_data.csv')
+# Step 3: Initialize Model & Create Indexes
+# Load financial data
+df = load_financial_data('/financial_data.csv')
 corpus, metadata = build_corpus(df)
 
-# 🔹 Debug: Print corpus and metadata length
-print(f"📌 Corpus Length: {len(corpus)}")  # Should match metadata
-print(f"📌 Metadata Length: {len(metadata)}")  # Should match your friend's
+# Initialize pre-trained embedding model
+model = SentenceTransformer('all-MiniLM-L6-v2')
 
 # Generate embeddings
 embeddings = model.encode(corpus, convert_to_numpy=True)
-# 🔹 Debug: Print FAISS embedding shape
-print(f"✅ FAISS Embeddings Shape: {embeddings.shape}")  # Should be (13, embedding_dim)
 
-
-# Create FAISS index
-d = embeddings.shape[1]
+# Create FAISS index for vector search
+d = embeddings.shape[1]  # Dimension of embeddings
 index = faiss.IndexFlatL2(d)
 index.add(embeddings)
-# 🔹 Debug: Print FAISS index size before saving
-print(f"✅ FAISS Index Size Before Saving: {index.ntotal}")  # Should match corpus length
 
-# Create BM25 Index
-tokenized_corpus = [text.lower().split() for text in corpus]  # Ensure consistent tokenization
+# Create BM25 Index for keyword-based retrieval
+tokenized_corpus = [text.lower().split() for text in corpus]
 bm25 = BM25Okapi(tokenized_corpus)
 
-# Save index and metadata
-faiss.write_index(index, "vector_index.faiss")
-# Debug final FAISS index size
-print(f"✅ Final FAISS Index Size: {index.ntotal}")  # Should match metadata length
+# Step 4: Implement Multi-Stage Retrieval
+def retrieve_documents(query, top_k=5):
+    """
+    Multi-stage retrieval using BM25 and FAISS:
+    - Stage 1: BM25 gets top keyword-matching documents.
+    - Stage 2: FAISS refines results using semantic similarity.
+    - Confidence scores are normalized for better interpretation.
+    """
 
-with open("metadata.pkl", "wb") as f:
-    pickle.dump(metadata, f)
-with open("bm25.pkl", "wb") as f:
-    pickle.dump(bm25, f)
-with open("bm25_corpus.pkl", "wb") as f:
-    pickle.dump(corpus, f)  # Ensure corpus is saved
+    # BM25 Retrieval (Keyword-based)
+    query_tokens = query.lower().split()
+    bm25_scores = bm25.get_scores(query_tokens)
+    bm25_top_indices = np.argsort(bm25_scores)[-top_k:][::-1]
 
-print("✅ FAISS index, metadata, and BM25 index successfully created and saved.")
+    # FAISS Retrieval (Semantic-based)
+    query_embedding = model.encode([query], convert_to_numpy=True)
+    _, faiss_indices = index.search(query_embedding, top_k)
+
+    # Combine results
+    combined_indices = list(set(bm25_top_indices).union(set(faiss_indices[0])))
+    
+    results = []
+    for idx in combined_indices:
+        text = metadata[idx]
+        confidence = bm25_scores[idx] + np.dot(embeddings[idx], query_embedding.T)[0]
+        results.append((text, confidence))
+
+    # Normalize confidence scores (0 to 1)
+    scores = np.array([r[1] for r in results]).reshape(-1, 1)
+    scaler = MinMaxScaler()
+    scores = scaler.fit_transform(scores).flatten()
+
+    return [(results[i][0], round(scores[i], 2)) for i in range(len(results))]
 
 # Step 5: Implement Guardrails
 def validate_query(query):
