@@ -1,7 +1,3 @@
-pip install faiss-cpu
-pip install rank_bm25
-pip install streamlit -q
-
 import faiss
 import pickle
 import numpy as np
