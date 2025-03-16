@@ -111,20 +111,35 @@ def retrieve_documents(query, top_k=5):
     return [(results[i][0], round(scores[i], 2)) for i in range(len(results))]
 
 # Step 5: Implement Guardrails
+from sentence_transformers import util
+
 def validate_query(query):
     """
-    Basic query guardrails:
-    - Rejects queries with harmful content.
-    - Ensures financial relevance.
+    Enhanced query guardrails:
+    - Rejects queries with harmful or irrelevant content.
+    - Ensures financial relevance using keyword filtering and embedding similarity.
     """
     forbidden_words = ["hack", "attack", "illegal", "terror", "drugs"]
+    finance_keywords = ["revenue", "profit", "market cap", "debt", "income", "ROE", "EBITDA"]
+
+    # Block forbidden words
     if any(word in query.lower() for word in forbidden_words):
         return False, "Your query is blocked due to security reasons."
-    
-    if len(query.split()) < 2:  # Ensure queries are meaningful
-        return False, "Query too short, please provide more context."
-    
+
+    # Check for financial relevance using keyword matching
+    if not any(word in query.lower() for word in finance_keywords):
+        return False, "Query seems irrelevant. Please ask a financial-related question."
+
+    # (Optional) Use embedding similarity to detect out-of-domain queries
+    query_embedding = model.encode([query], convert_to_numpy=True)
+    corpus_embedding = model.encode(finance_keywords, convert_to_numpy=True)
+    similarity_scores = util.pytorch_cos_sim(query_embedding, corpus_embedding)
+
+    if similarity_scores.max() < 0.5:  # Threshold for relevance
+        return False, "Query does not match financial topics. Please rephrase."
+
     return True, ""
+
 
 # Step 6: Streamlit UI
 st.title("Financial Data RAG Search")
