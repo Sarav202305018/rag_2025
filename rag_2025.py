@@ -7,7 +7,7 @@ from rank_bm25 import BM25Okapi
 import re
 
 # Load financial data
-def load_financial_data(file_path='/content/sample_data/financial_data.csv'):
+def load_financial_data(file_path='financial_data.csv'):
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.strip()  # Remove extra spaces in column names
     df = df.dropna()
@@ -50,7 +50,7 @@ def build_corpus(df):
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
 # Load and preprocess data
-df = load_financial_data('/content/sample_data/financial_data.csv')
+df = load_financial_data('financial_data.csv')
 corpus, metadata = build_corpus(df)
 
 # 🔹 Debug: Print corpus and metadata length
